@@ -5,12 +5,38 @@
 import { prisma } from "../db/prisma";
 import logger from "../utils/logger";
 
+// ─────────────────────────────────────────────────────────
+// INPUT TYPES
+// ─────────────────────────────────────────────────────────
+
+// Shape of data needed to create a new project
+interface CreateProjectData {
+  name:        string;  // Telegram group title or custom name
+  groupChatId: string;  // Telegram chat ID of the group
+}
+
+// Shape of data needed to get a project's summary
+interface ProjectSummary {
+  totalMembers: number;
+  todo:         number;
+  inProgress:   number;
+  blocked:      number;
+  inReview:     number;
+  done:         number;
+  overdue: Array<{
+    id:       string;
+    title:    string;
+    dueDate:  Date | null;
+    assignee: { telegramHandle: string | null } | null;
+  }>;
+}
+
 export const projectService = {
   /**
    * Create a new project record when a group runs /setup.
    * Throws on failure so the bot must tell the user if this fails.
    */
-  async create(data: { name: string; groupChatId: string }) {
+  async create(data: CreateProjectData) {
     try {
       const project = await prisma.project.create({ data });
       logger.info(
@@ -68,7 +94,7 @@ export const projectService = {
    * Used by the agent's get_project_summary tool and the daily summary scheduler.
    * Throws on failure so the summary is a core feature, caller must handle the error.
    */
-  async getSummary(projectId: string) {
+  async getSummary(projectId: string): Promise<ProjectSummary> {
     try {
       // Load tasks and members in parallel for performance
       const [tasks, members] = await Promise.all([
@@ -89,9 +115,16 @@ export const projectService = {
         inReview: tasks.filter((t) => t.status === "IN_REVIEW").length,
         done: tasks.filter((t) => t.status === "DONE").length,
         // Overdue = has a due date, due date is in the past, and not yet done
-        overdue: tasks.filter(
-          (t) => t.dueDate && t.dueDate < now && t.status !== "DONE",
-        ),
+        overdue: tasks
+          .filter((t) => t.dueDate && t.dueDate < now && t.status !== "DONE")
+          .map((t) => ({
+            id: t.id,
+            title: t.title,
+            dueDate: t.dueDate,
+            assignee: t.assignee
+              ? { telegramHandle: t.assignee.telegramHandle }
+              : null,
+          })),
       };
     } catch (err) {
       logger.error({ err, projectId }, "Failed to get project summary");
