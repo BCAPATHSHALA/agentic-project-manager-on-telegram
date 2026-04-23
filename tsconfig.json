@@ -1,29 +1,39 @@
 {
   "compilerOptions": {
-    // Environment setup & latest features
-    "lib": ["ESNext"],
-    "target": "ESNext",
-    "module": "Preserve",
+    // Environment
+    "lib":             ["ESNext"],
+    "target":          "ESNext",
+    "module":          "Preserve",
     "moduleDetection": "force",
-    "jsx": "react-jsx",
-    "allowJs": true,
 
-    // Bundler mode
-    "moduleResolution": "bundler",
+    // Paths
+    "rootDir": ".",
+    "outDir":  "./dist",
+
+    // Bundler mode (Bun)
+    // noEmit: true → tsc is for type-checking only
+    // bun build handles actual compilation → dist/
+    "moduleResolution":           "bundler",
     "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "noEmit": true,
+    "verbatimModuleSyntax":       true,
+    "noEmit":                     true,
 
-    // Best practices
-    "strict": true,
+    // Types
+    "types":        ["bun-types"],
     "skipLibCheck": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
 
-    // Some stricter flags (disabled by default)
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false
-  }
+    // Strictness
+    "strict":                     true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride":         true,
+    "noUnusedLocals":             false,
+    "noUnusedParameters":         false,
+
+    // Extras
+    "resolveJsonModule": true,
+    "esModuleInterop":   true,
+    "allowJs":           false
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

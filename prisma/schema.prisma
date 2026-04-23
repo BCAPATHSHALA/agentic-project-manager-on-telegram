@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  groupChatId String   @unique
+  createdAt   DateTime @default(now())
+  tasks       Task[]
+  members     Member[]
+}
+
+model Member {
+  id             String   @id @default(uuid())
+  telegramUserId BigInt   @unique
+  telegramHandle String?
+  displayName    String
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id])
+  tasks          Task[]   @relation("AssignedTasks")
+  updates        StatusUpdate[]
+}
+
+model Task {
+  id            String       @id @default(uuid())
+  title         String
+  description   String?
+  status        TaskStatus   @default(TODO)
+  priority      Priority     @default(MEDIUM)
+  assigneeId    String?
+  assignee      Member?      @relation("AssignedTasks", fields: [assigneeId], references: [id])
+  projectId     String
+  project       Project      @relation(fields: [projectId], references: [id])
+  dueDate       DateTime?
+  lastCheckedAt DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  updates       StatusUpdate[]
+}
+
+enum TaskStatus { 
+  TODO 
+  IN_PROGRESS 
+  BLOCKED 
+  IN_REVIEW 
+  DONE 
+}
+
+enum Priority  { 
+  LOW 
+  MEDIUM 
+  HIGH 
+  URGENT 
+}
+
+model StatusUpdate {
+  id        String   @id @default(uuid())
+  content   String
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id])
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model ConversationMemory {
+  id        String   @id @default(uuid())
+  chatId    String
+  role      String
+  content   String
+  createdAt DateTime @default(now())
+  @@index([chatId, createdAt])
+}

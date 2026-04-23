@@ -4,16 +4,20 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun --watch src/index.ts",
-    "start": "bun src/index.ts",
-    "db:up": "docker-compose up -d",
-    "db:down": "docker-compose down",
-    "db:migrate": "bunx prisma migrate dev",
-    "db:generate": "bunx prisma generate",
-    "db:studio": "bunx prisma studio"
+    "dev":          "bun --watch src/index.ts",
+    "build":        "bun build src/index.ts --outdir dist --target bun --minify",
+    "start":        "bun src/index.ts",
+    "start:prod":   "bun dist/index.js",
+    "typecheck":    "tsc --noEmit",
+    "db:up":        "docker-compose up -d",
+    "db:down":      "docker-compose down",
+    "db:migrate":   "bunx prisma migrate dev",
+    "db:generate":  "bunx prisma generate",
+    "db:studio":    "bunx prisma studio"
   },
   "dependencies": {
     "@openai/agents": "^0.8.5",
+    "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "dayjs": "^1.11.20",
     "grammy": "^1.42.0",
