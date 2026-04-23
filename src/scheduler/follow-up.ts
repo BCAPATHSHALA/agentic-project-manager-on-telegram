@@ -1,93 +1,102 @@
-// src/scheduler/follow-up.ts
-// Proactive follow-up logic, the core "agentic" behavior of the bot.
-// Runs every 4 hours via the cron scheduler.
-//
-// What it does:
-//  1. Finds tasks that are IN_PROGRESS or BLOCKED and haven't been updated recently
-//  2. Asks the AI agent whether and how to follow up
-//  3. Sends a DM to the assignee if the agent decides to
-//  4. If ignored for 24h, the agent escalates gently in the group chat
-//  5. Updates lastCheckedAt so the same task isn't pinged again too soon
-//
-// Anti-spam rules (enforced here AND in the system prompt):
-//  - Only follow up if lastCheckedAt is null or > 4 hours ago
-//  - Max 20 tasks per run to avoid flooding
-//  - 500ms delay between DMs to respect Telegram rate limits
-
 import { Bot } from "grammy";
+import dayjs from "dayjs";
 import { runScheduledAgent } from "../agent/agent";
 import { taskService } from "../services/task.service";
 import logger from "../utils/logger";
-import dayjs from "dayjs";
 
-// ─────────────────────────────────────────────────────────
-// CONSTANTS
-// ─────────────────────────────────────────────────────────
-
-/** Tasks not checked in this many hours are considered stale */
 const STALE_AFTER_HOURS = 4;
-
-/** Tasks not updated in this many hours trigger group escalation */
 const ESCALATE_AFTER_HOURS = 24;
-
-/** Max tasks to process per run, prevents flooding */
 const MAX_TASKS_PER_RUN = 20;
-
-/** Delay between Telegram messages to respect rate limits */
 const DM_DELAY_MS = 500;
 
-// ─────────────────────────────────────────────────────────
-// MAIN EXPORT
-// ─────────────────────────────────────────────────────────
+interface FollowUpRunOptions {
+  staleAfterHours?: number;
+  escalateAfterHours?: number;
+}
 
-export async function runFollowUps(bot: Bot): Promise<void> {
-  // Find all stale tasks, uses taskService to keep DB logic centralised
-  const staleTasks = await taskService.findStaleTasks(STALE_AFTER_HOURS);
+export interface FollowUpRunResult {
+  processed: number;
+  dmSent: number;
+  dmFailed: number;
+  dmForbidden: number;
+  escalationsPosted: number;
+}
+
+type FollowUpTask = Awaited<ReturnType<typeof taskService.findStaleTasks>>[number];
+type FollowUpTaskResult = Pick<
+  FollowUpRunResult,
+  "dmSent" | "dmFailed" | "dmForbidden" | "escalationsPosted"
+>;
+
+export async function runFollowUps(
+  bot: Bot,
+  options: FollowUpRunOptions = {},
+): Promise<FollowUpRunResult> {
+  const result: FollowUpRunResult = {
+    processed: 0,
+    dmSent: 0,
+    dmFailed: 0,
+    dmForbidden: 0,
+    escalationsPosted: 0,
+  };
+
+  const staleAfterHours = options.staleAfterHours ?? STALE_AFTER_HOURS;
+  const escalateAfterHours =
+    options.escalateAfterHours ?? ESCALATE_AFTER_HOURS;
+
+  const staleTasks = await taskService.findStaleTasks(staleAfterHours);
   const tasksToProcess = staleTasks.slice(0, MAX_TASKS_PER_RUN);
 
   if (!tasksToProcess.length) {
-    logger.info("No stale tasks found — skipping follow-ups");
-    return;
+    logger.info("No stale tasks found - skipping follow-ups");
+    return result;
   }
 
   logger.info(
-    { count: tasksToProcess.length },
+    { count: tasksToProcess.length, staleAfterHours, escalateAfterHours },
     "Processing stale tasks for follow-up",
   );
 
   for (const task of tasksToProcess) {
-    // Skip if no assignee, nobody to follow up with
     if (!task.assignee) {
-      logger.debug({ taskId: task.id }, "Skipping stale task — no assignee");
+      logger.debug({ taskId: task.id }, "Skipping stale task - no assignee");
       continue;
     }
 
     try {
-      await processFollowUp(bot, task);
+      result.processed += 1;
+      const taskResult = await processFollowUp(bot, task, escalateAfterHours);
+      result.dmSent += taskResult.dmSent;
+      result.dmFailed += taskResult.dmFailed;
+      result.dmForbidden += taskResult.dmForbidden;
+      result.escalationsPosted += taskResult.escalationsPosted;
     } catch (err) {
-      // Log and continue, one task failure must not stop the rest
       logger.error({ err, taskId: task.id }, "Follow-up failed for task");
     }
 
-    // Small delay between tasks to avoid Telegram rate limits (30 msgs/sec max)
     await sleep(DM_DELAY_MS);
   }
-}
 
-// ─────────────────────────────────────────────────────────
-// PROCESS ONE TASK
-// Builds a context-rich prompt, runs the agent, sends DMs + escalation.
-// ─────────────────────────────────────────────────────────
+  return result;
+}
 
 async function processFollowUp(
   bot: Bot,
-  task: Awaited<ReturnType<typeof taskService.findStaleTasks>>[number],
-): Promise<void> {
+  task: FollowUpTask,
+  escalateAfterHours: number,
+): Promise<FollowUpTaskResult> {
+  const taskResult: FollowUpTaskResult = {
+    dmSent: 0,
+    dmFailed: 0,
+    dmForbidden: 0,
+    escalationsPosted: 0,
+  };
+
   const assignee = task.assignee!;
-  const lastUpdate = task.updates[0]; // most recent update (preloaded)
+  const lastUpdate = task.updates[0];
   const lastUpdatedAt = lastUpdate?.createdAt ?? task.createdAt;
   const hoursSince = dayjs().diff(dayjs(lastUpdatedAt), "hour");
-  const shouldEscalate = hoursSince >= ESCALATE_AFTER_HOURS;
+  const shouldEscalate = hoursSince >= escalateAfterHours;
 
   logger.debug(
     {
@@ -99,64 +108,73 @@ async function processFollowUp(
     "Processing follow-up",
   );
 
-  // Build a context-rich prompt so the agent can make a smart decision
   const prompt = buildFollowUpPrompt(
     task,
     lastUpdate,
     hoursSince,
     shouldEscalate,
+    escalateAfterHours,
   );
 
-  // Run the scheduled agent with no user context, no memory needed
   const { reply, pendingDMs } = await runScheduledAgent(
     prompt,
     task.project.id,
-    `dm_${assignee.telegramUserId}`, // synthetic chatId for DM context
+    `dm_${assignee.telegramUserId}`,
   );
 
-  // Send any DMs the agent queued
   for (const dm of pendingDMs) {
     try {
       await bot.api.sendMessage(Number(assignee.telegramUserId), dm.message);
+      taskResult.dmSent += 1;
       logger.info(
         { taskId: task.id, handle: assignee.telegramHandle },
         "Follow-up DM sent",
       );
     } catch (err) {
-      // User may not have started the bot in DM - non-fatal
-      logger.warn(
-        { err, handle: assignee.telegramHandle },
-        "Could not send DM - user may not have started the bot",
-      );
+      const maybeGrammy = err as { error_code?: number; description?: string };
+      const isForbiddenDm =
+        maybeGrammy?.error_code === 403 &&
+        maybeGrammy?.description?.includes("can't initiate conversation with a user");
+
+      if (isForbiddenDm) {
+        taskResult.dmForbidden += 1;
+        logger.warn(
+          {
+            handle: assignee.telegramHandle,
+            telegramUserId: assignee.telegramUserId.toString(),
+          },
+          "DM blocked by Telegram policy: user must open a PRIVATE chat with the bot and send /start there (group /start does not count)",
+        );
+      } else {
+        taskResult.dmFailed += 1;
+        logger.warn(
+          { err, handle: assignee.telegramHandle },
+          "Could not send DM",
+        );
+      }
     }
   }
 
-  // If the agent produced a reply AND this task should be escalated,
-  // post the escalation message to the group chat
   if (shouldEscalate && reply.trim()) {
     try {
       await bot.api.sendMessage(Number(task.project.groupChatId), reply);
+      taskResult.escalationsPosted += 1;
       logger.info({ taskId: task.id }, "Group escalation posted");
     } catch (err) {
       logger.error({ err, taskId: task.id }, "Failed to post group escalation");
     }
   }
 
-  // Mark task as checked — prevents re-pinging for another 4 hours
   await taskService.markChecked(task.id);
+  return taskResult;
 }
 
-// ─────────────────────────────────────────────────────────
-// PROMPT BUILDER
-// Gives the agent full context so it can decide exactly what to say.
-// The agent decides: should I DM? What tone? Should I escalate?
-// ─────────────────────────────────────────────────────────
-
 function buildFollowUpPrompt(
-  task: Awaited<ReturnType<typeof taskService.findStaleTasks>>[number],
+  task: FollowUpTask,
   lastUpdate: { content: string; createdAt: Date } | undefined,
   hoursSince: number,
   shouldEscalate: boolean,
+  escalateAfterHours: number,
 ): string {
   const assignee = task.assignee!;
   const lines = [
@@ -175,26 +193,22 @@ function buildFollowUpPrompt(
 
   if (shouldEscalate) {
     lines.push(
-      `This task has been silent for over ${ESCALATE_AFTER_HOURS} hours.`,
-      `Do two things:`,
+      `This task has been silent for over ${escalateAfterHours} hours.`,
+      "Do two things:",
       `1. Use send_dm to send a firm but friendly DM to @${assignee.telegramHandle} asking for an immediate update.`,
-      `2. Compose a short group escalation message (returned as your reply) so the team is aware.`,
-      `The group message should be non-blaming — just flag that the task needs attention.`,
+      "2. Compose a short group escalation message (returned as your reply) so the team is aware.",
+      "The group message should be non-blaming - just flag that the task needs attention.",
     );
   } else {
     lines.push(
       `This task has not been updated in ${hoursSince} hours.`,
       `Use send_dm to send a brief, friendly DM to @${assignee.telegramHandle} asking for a quick status update.`,
-      `Do NOT post anything to the group chat. this is a private check-in only.`,
+      "Do NOT post anything to the group chat. This is a private check-in only.",
     );
   }
 
   return lines.join("\n");
 }
-
-// ─────────────────────────────────────────────────────────
-// UTILITY
-// ─────────────────────────────────────────────────────────
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

@@ -213,6 +213,55 @@ bun run db:studio     # Open Prisma Studio
 
 ---
 
+## Follow-Up Testing (Manual)
+
+Use this to test follow-up scheduler behavior immediately without waiting 4 hours.
+
+### Run DM follow-up test now
+
+Linux/macOS:
+
+```bash
+FOLLOWUP_TEST_STALE_HOURS=0 FOLLOWUP_TEST_ESCALATE_HOURS=24 bun run test:followup
+```
+
+Windows PowerShell:
+
+```powershell
+$env:FOLLOWUP_TEST_STALE_HOURS="0"
+$env:FOLLOWUP_TEST_ESCALATE_HOURS="24"
+bun run test:followup
+```
+
+### Run escalation test now (DM + group escalation)
+
+Linux/macOS:
+
+```bash
+FOLLOWUP_TEST_STALE_HOURS=0 FOLLOWUP_TEST_ESCALATE_HOURS=0 bun run test:followup
+```
+
+Windows PowerShell:
+
+```powershell
+$env:FOLLOWUP_TEST_STALE_HOURS="0"
+$env:FOLLOWUP_TEST_ESCALATE_HOURS="0"
+bun run test:followup
+```
+
+### Telegram DM requirement
+
+If you see this error:
+
+`403 Forbidden: bot can't initiate conversation with a user`
+
+Do this once:
+1. Open a private chat with `@AgenticPM_bot`.
+2. Send `/start` there (group `/start` does not count).
+3. Re-run `bun run test:followup`.
+
+---
+
 <div align="center">
 
 ### Built with ❤️ by [Manoj Kumar](https://github.com/BCAPATHSHALA)
