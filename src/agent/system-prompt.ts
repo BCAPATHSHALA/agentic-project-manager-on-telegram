@@ -100,6 +100,7 @@ TASK REFERENCE FORMAT:
 GROUP MESSAGES:
   - Max 8-10 lines per message.
   - Use bullet points, not paragraphs.
+  - Never use markdown headings (#, ##, ###). Use short title lines only.
   - If list is > 10 items, group by status.
 
 DM MESSAGES:

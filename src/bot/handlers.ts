@@ -48,6 +48,33 @@ function buildContext(
   };
 }
 
+function escapeHtml(input: string): string {
+  return input
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function renderInlineBold(input: string): string {
+  const escaped = escapeHtml(input);
+  return escaped.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+}
+
+// Telegram does not support markdown headings like "###".
+// Convert heading lines to bold HTML so they render cleanly.
+function formatAgentReplyForTelegram(reply: string): string {
+  return reply
+    .split("\n")
+    .map((line) => {
+      const headingMatch = line.match(/^#{1,6}\s+(.+)$/);
+      if (headingMatch) {
+        return `<b>${escapeHtml(headingMatch[1].trim())}</b>`;
+      }
+      return renderInlineBold(line);
+    })
+    .join("\n");
+}
+
 // ─────────────────────────────────────────────────────────
 // HELPER: Send all DMs the agent queued during its run
 // Called after every runAgent(). DMs are sent one by one.
@@ -238,7 +265,9 @@ export function setupHandlers(bot: Bot): void {
         agentCtx,
       );
 
-      await ctx.reply(reply, { parse_mode: "Markdown" });
+      await ctx.reply(formatAgentReplyForTelegram(reply), {
+        parse_mode: "HTML",
+      });
       await sendPendingDMs(bot, pendingDMs, project.id);
     } catch (err) {
       logger.error({ err }, "/status handler failed");
@@ -279,7 +308,9 @@ export function setupHandlers(bot: Bot): void {
         "List all tasks grouped by status.",
         agentCtx,
       );
-      await ctx.reply(reply, { parse_mode: "Markdown" });
+      await ctx.reply(formatAgentReplyForTelegram(reply), {
+        parse_mode: "HTML",
+      });
     } catch (err) {
       logger.error({ err }, "/tasks handler failed");
       await ctx
@@ -317,7 +348,9 @@ export function setupHandlers(bot: Bot): void {
         `Show all tasks assigned to @${handle}`,
         agentCtx,
       );
-      await ctx.reply(reply, { parse_mode: "Markdown" });
+      await ctx.reply(formatAgentReplyForTelegram(reply), {
+        parse_mode: "HTML",
+      });
     } catch (err) {
       logger.error({ err, userId: ctx.from?.id }, "/mytasks handler failed");
       await ctx
@@ -392,7 +425,9 @@ export function setupHandlers(bot: Bot): void {
 
       const { reply, pendingDMs } = await runAgent(text, agentCtx);
 
-      await ctx.reply(reply, { parse_mode: "Markdown" });
+      await ctx.reply(formatAgentReplyForTelegram(reply), {
+        parse_mode: "HTML",
+      });
 
       // Send any DMs the agent queued during its run
       await sendPendingDMs(bot, pendingDMs, project.id);
