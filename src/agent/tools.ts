@@ -53,19 +53,20 @@ export const createTaskTool = tool({
     "Create a new task in the project. Use this when someone describes work that is not yet tracked.",
   parameters: z.object({
     title: z.string().describe("Short, clear task title"),
-    description: z
-      .string()
-      .optional()
-      .describe("More detail about what needs to be done"),
-    assignee_handle: z
-      .string()
-      .optional()
-      .describe("Telegram @handle of the person responsible"),
-    priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).default("MEDIUM"),
+    description: z.string().nullable().describe(
+      "More detail about what needs to be done. Use null if not provided.",
+    ),
+    assignee_handle: z.string().nullable().describe(
+      "Telegram @handle of the person responsible. Use null if unassigned.",
+    ),
+    priority: z
+      .enum(["LOW", "MEDIUM", "HIGH", "URGENT"])
+      .nullable()
+      .describe("Task priority. Use null to default to MEDIUM."),
     due_date: z
       .string()
-      .optional()
-      .describe("Due date as ISO string e.g. 2025-05-01"),
+      .nullable()
+      .describe("Due date as ISO string e.g. 2025-05-01. Use null if unknown."),
   }),
   async execute(
     { title, description, assignee_handle, priority, due_date },
@@ -73,19 +74,20 @@ export const createTaskTool = tool({
   ) {
     try {
       const context = requireAgentContext(ctx);
+      const resolvedPriority = priority ?? "MEDIUM";
       const task = await taskService.create({
         title,
-        description,
-        assignee_handle,
-        priority,
-        due_date,
+        description: description ?? undefined,
+        assignee_handle: assignee_handle ?? undefined,
+        priority: resolvedPriority,
+        due_date: due_date ?? undefined,
         projectId: context.projectId,
       });
       const assignee = assignee_handle
         ? `@${assignee_handle.replace(/^@/, "")}`
         : "unassigned";
       const due = due_date ? ` · due ${dayjs(due_date).format("DD MMM")}` : "";
-      return `✅ Task #${shortId(task.id)} created: "${task.title}" ${priorityEmoji(priority)} → ${assignee}${due}`;
+      return `✅ Task #${shortId(task.id)} created: "${task.title}" ${priorityEmoji(resolvedPriority)} → ${assignee}${due}`;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       return `❌ Failed to create task: ${msg}`;
@@ -100,25 +102,30 @@ export const createTaskTool = tool({
 export const updateTaskStatusTool = tool({
   name: "update_task_status",
   description:
-    "Update the status of an existing task. Call record_status_update first if there is a note to save.",
+    "Update the status of an existing task, and optionally update its description. Call record_status_update first if there is a note to save.",
   parameters: z.object({
     task_id: z.string().describe("Task ID — full UUID or first 6 characters"),
     status: z.enum(["TODO", "IN_PROGRESS", "BLOCKED", "IN_REVIEW", "DONE"]),
+    description: z
+      .string()
+      .nullable()
+      .describe("Optional new task description. Use null to keep existing description."),
     note: z
       .string()
-      .optional()
-      .describe("Optional note explaining the status change"),
+      .nullable()
+      .describe("Optional note explaining the status change. Use null if none."),
   }),
-  async execute({ task_id, status, note }, ctx) {
+  async execute({ task_id, status, description, note }, ctx) {
     try {
       const context = requireAgentContext(ctx);
       const task = await taskService.updateStatus(
         task_id,
         status,
-        note,
+        description ?? undefined,
+        note ?? undefined,
         context.userId,
       );
-      return `${statusEmoji(status)} Task #${shortId(task.id)} "${task.title}" → ${status}${note ? `\n📝 ${note}` : ""}`;
+      return `${statusEmoji(status)} Task #${shortId(task.id)} "${task.title}" → ${status}${description ? "\n🧾 Description updated." : ""}${note ? `\n📝 ${note}` : ""}`;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       return `❌ Failed to update task status: ${msg}`;
@@ -167,17 +174,25 @@ export const listTasksTool = tool({
   parameters: z.object({
     status: z
       .enum(["TODO", "IN_PROGRESS", "BLOCKED", "IN_REVIEW", "DONE", "ALL"])
-      .default("ALL"),
-    assignee_handle: z.string().optional().describe("Filter by @handle"),
-    priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
+      .nullable()
+      .describe("Status filter. Use ALL for no status filter, or null to default to ALL."),
+    assignee_handle: z
+      .string()
+      .nullable()
+      .describe("Filter by @handle. Use null for no assignee filter."),
+    priority: z
+      .enum(["LOW", "MEDIUM", "HIGH", "URGENT"])
+      .nullable()
+      .describe("Priority filter. Use null for no priority filter."),
   }),
   async execute({ status, assignee_handle, priority }, ctx) {
     try {
       const context = requireAgentContext(ctx);
+      const resolvedStatus = status ?? "ALL";
       const tasks = await taskService.list(context.projectId, {
-        status,
-        assignee_handle,
-        priority,
+        status: resolvedStatus,
+        assignee_handle: assignee_handle ?? undefined,
+        priority: priority ?? undefined,
       });
       if (!tasks.length) return "No tasks found matching those filters.";
       return tasks
@@ -352,12 +367,12 @@ export const getTaskHistoryTool = tool({
       .number()
       .min(1)
       .max(10)
-      .default(5)
-      .describe("How many recent updates to return"),
+      .nullable()
+      .describe("How many recent updates to return (1-10). Use null to default to 5."),
   }),
   async execute({ task_id, limit }) {
     try {
-      const history = await taskService.getHistory(task_id, limit);
+      const history = await taskService.getHistory(task_id, limit ?? 5);
       if (!history.length)
         return `No updates recorded for task #${task_id.slice(0, 6)} yet.`;
       return history

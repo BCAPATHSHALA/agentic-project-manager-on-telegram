@@ -84,6 +84,7 @@ export const taskService = {
   async updateStatus(
     taskId: string,
     status: TaskStatus,
+    description?: string,
     note?: string,
     userId?: bigint,
   ) {
@@ -94,7 +95,11 @@ export const taskService = {
 
       const updated = await prisma.task.update({
         where: { id: task.id },
-        data: { status, updatedAt: new Date() },
+        data: {
+          status,
+          updatedAt: new Date(),
+          ...(typeof description === "string" ? { description } : {}),
+        },
         include: { assignee: true },
       });
 
