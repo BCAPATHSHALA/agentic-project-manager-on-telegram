@@ -43,18 +43,19 @@ const DM_DELAY_MS = 500;
 export async function runFollowUps(bot: Bot): Promise<void> {
   // Find all stale tasks, uses taskService to keep DB logic centralised
   const staleTasks = await taskService.findStaleTasks(STALE_AFTER_HOURS);
+  const tasksToProcess = staleTasks.slice(0, MAX_TASKS_PER_RUN);
 
-  if (!staleTasks.length) {
+  if (!tasksToProcess.length) {
     logger.info("No stale tasks found — skipping follow-ups");
     return;
   }
 
   logger.info(
-    { count: staleTasks.length },
+    { count: tasksToProcess.length },
     "Processing stale tasks for follow-up",
   );
 
-  for (const task of staleTasks) {
+  for (const task of tasksToProcess) {
     // Skip if no assignee, nobody to follow up with
     if (!task.assignee) {
       logger.debug({ taskId: task.id }, "Skipping stale task — no assignee");
@@ -134,9 +135,7 @@ async function processFollowUp(
   // post the escalation message to the group chat
   if (shouldEscalate && reply.trim()) {
     try {
-      await bot.api.sendMessage(Number(task.project.groupChatId), reply, {
-        parse_mode: "Markdown",
-      });
+      await bot.api.sendMessage(Number(task.project.groupChatId), reply);
       logger.info({ taskId: task.id }, "Group escalation posted");
     } catch (err) {
       logger.error({ err, taskId: task.id }, "Failed to post group escalation");

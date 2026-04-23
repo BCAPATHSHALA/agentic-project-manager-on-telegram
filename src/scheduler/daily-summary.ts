@@ -123,12 +123,10 @@ async function generateAndSendSummary(
     return;
   }
 
-  // Post the summary to the project group with date header
-  const message = `📅 *Daily Standup - ${dayjs().format("ddd, DD MMM YYYY")}*\n\n${reply}`;
+  // Post the summary as plain text to avoid parse-mode failures
+  const message = `📅 Daily Standup - ${dayjs().format("ddd, DD MMM YYYY")}\n\n${reply}`;
 
-  await bot.api.sendMessage(Number(project.groupChatId), message, {
-    parse_mode: "Markdown",
-  });
+  await bot.api.sendMessage(Number(project.groupChatId), message);
 
   logger.info({ projectId: project.id }, "Daily summary posted successfully");
 }

@@ -14,7 +14,9 @@ function withRequiredSsl(connectionString: string): string {
 
     const hostname = url.hostname.toLowerCase();
     const isLocalHost =
-      hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1";
     if (isLocalHost) {
       return connectionString;
     }

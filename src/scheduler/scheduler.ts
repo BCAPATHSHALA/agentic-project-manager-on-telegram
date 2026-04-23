@@ -101,14 +101,12 @@ async function runOverdueAlert(bot: Bot): Promise<void> {
     );
 
     const message =
-      `⚠️ *Overdue Tasks — Action Required*\n\n` +
+      `⚠️ Overdue Tasks - Action Required\n\n` +
       `${lines.join("\n")}\n\n` +
       `These tasks are past their due date. Please update their status or due date.`;
 
     try {
-      await bot.api.sendMessage(Number(project.groupChatId), message, {
-        parse_mode: "Markdown",
-      });
+      await bot.api.sendMessage(Number(project.groupChatId), message);
       logger.info(
         { projectId: project.id, count: project.tasks.length },
         "Overdue alert sent",
