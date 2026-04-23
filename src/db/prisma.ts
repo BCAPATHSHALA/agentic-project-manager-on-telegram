@@ -19,8 +19,18 @@ function withRequiredSsl(connectionString: string): string {
       return connectionString;
     }
 
-    if (!url.searchParams.has("sslmode")) {
-      url.searchParams.set("sslmode", "require");
+    const currentSslMode = url.searchParams.get("sslmode")?.toLowerCase();
+    const useLibpqCompat =
+      url.searchParams.get("uselibpqcompat")?.toLowerCase() === "true";
+    const legacyAliasModes = new Set(["prefer", "require", "verify-ca"]);
+
+    // pg/pg-connection-string will change semantics for some sslmode values.
+    // Default to verify-full now (current secure behavior) unless the URL
+    // explicitly opts into libpq compatibility.
+    if (!currentSslMode) {
+      url.searchParams.set("sslmode", "verify-full");
+    } else if (legacyAliasModes.has(currentSslMode) && !useLibpqCompat) {
+      url.searchParams.set("sslmode", "verify-full");
     }
 
     return url.toString();
