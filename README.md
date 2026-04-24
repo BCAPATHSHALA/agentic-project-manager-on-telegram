@@ -39,6 +39,29 @@ Most teams use Telegram to communicate but switch to Jira/Notion/Trello for task
 
 <img src="images/4. Proactive Behavior (The Agentic Part).png" alt="Proactive Behavior" width="900" />
 
+#### Stale Task Detection & Follow-Up Logic
+
+Every 4 hours, the scheduler scans for **stale tasks** and proactively contacts assignees via DM, no manual trigger needed.
+
+**A task is considered stale when:**
+- Status is `IN_PROGRESS` or `BLOCKED`
+- Has an assignee
+- `lastCheckedAt` is `null` OR older than 4 hours
+
+**Two-tier response based on how long the task has been silent:**
+
+| Silence Duration | Bot Action |
+| ---------------- | ---------- |
+| > **4 hours** | Private DM to assignee, friendly check-in, nothing posted to group |
+| > **24 hours** | Private DM to assignee (firm) **+** non-blaming group escalation message |
+
+**Flow inside the scheduler:**
+
+<img src="images/11. Flow inside the scheduler.png" alt="Flow inside the scheduler" width="900" />
+
+**DM blocked by Telegram (403 error)?**
+The bot can only initiate a DM if the user has previously opened a private chat. Fix: open `@AgenticPM_bot` in private and send `/start` once (group `/start` does not count).
+
 ---
 
 ## 🗄️ Database Schema

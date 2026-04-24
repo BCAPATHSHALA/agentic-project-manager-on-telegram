@@ -26,6 +26,7 @@ import { Bot } from "grammy";
 import { runAgent, type AgentContext } from "../agent/agent";
 import { projectService } from "../services/project.service";
 import { memberService } from "../services/member.service";
+import { taskService } from "../services/task.service";
 import logger from "../utils/logger";
 
 // ─────────────────────────────────────────────────────────
@@ -73,6 +74,22 @@ function formatAgentReplyForTelegram(reply: string): string {
       return renderInlineBold(line);
     })
     .join("\n");
+}
+
+function statusEmoji(status: string): string {
+  return (
+    {
+      TODO: "⬜",
+      IN_PROGRESS: "🔄",
+      BLOCKED: "🚫",
+      IN_REVIEW: "👀",
+      DONE: "✅",
+    }[status] ?? "❓"
+  );
+}
+
+function formatStatusLabel(status: string): string {
+  return status.replaceAll("_", " ");
 }
 
 // ─────────────────────────────────────────────────────────
@@ -341,14 +358,35 @@ export function setupHandlers(bot: Bot): void {
         return;
       }
 
-      const agentCtx = buildContext(chatId, userId, handle, project.id);
-
       await ctx.api.sendChatAction(ctx.chat.id, "typing");
-      const { reply } = await runAgent(
-        `Show all tasks assigned to @${handle}`,
-        agentCtx,
-      );
-      await ctx.reply(formatAgentReplyForTelegram(reply), {
+      const tasks = await taskService.list(project.id, {
+        status: "ALL",
+        assignee_handle: handle,
+      });
+
+      if (!tasks.length) {
+        await ctx.reply(
+          `@${handle.replace(/^@/, "")} currently has no tasks in this project.`,
+        );
+        return;
+      }
+
+      const lines = tasks.map((task) => {
+        const due = task.dueDate
+          ? ` · due ${task.dueDate.toLocaleDateString("en-GB", {
+              day: "2-digit",
+              month: "short",
+            })}`
+          : "";
+        return `${statusEmoji(task.status)} #${task.id.slice(0, 6)} "${task.title}" - ${formatStatusLabel(task.status)}${due}`;
+      });
+
+      const message = [
+        `Tasks assigned to @${handle.replace(/^@/, "")}:`,
+        ...lines,
+      ].join("\n");
+
+      await ctx.reply(formatAgentReplyForTelegram(message), {
         parse_mode: "HTML",
       });
     } catch (err) {
