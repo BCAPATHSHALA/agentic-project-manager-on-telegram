@@ -19,6 +19,13 @@ Most teams use Telegram to communicate but switch to Jira/Notion/Trello for task
 
 ---
 
+## 🎬 Try It Yourself
+
+[![YouTube](https://img.shields.io/badge/YouTube-Demo-FF0000?style=for-the-badge&logo=youtube)](https://youtu.be/5pu6o4oJprI)
+[![Notion](https://img.shields.io/badge/Notion-Walkthrough-000000?style=for-the-badge&logo=notion)](https://www.notion.so/10xtechinfinity/Demo-for-Agentic-PM-34ca49df5d688025b0adeb2f22fb78b1#34ca49df5d688065be8acd2b0a72c3ef)
+
+---
+
 ## How It Works (HIGH LEVEL)
 
 <img src="images/1. HOW IT WORKS (HIGH LEVEL).png" alt="How It Works" width="900" />
@@ -295,5 +302,7 @@ Do this once:
 
 [![GitHub](https://img.shields.io/badge/GitHub-BCAPATHSHALA-181717?style=for-the-badge&logo=github)](https://github.com/BCAPATHSHALA)
 [![Telegram Bot](https://img.shields.io/badge/Telegram-@AgenticPM__bot-26A5E4?style=for-the-badge&logo=telegram)](https://t.me/AgenticPM_bot)
+[![YouTube](https://img.shields.io/badge/YouTube-Demo-FF0000?style=for-the-badge&logo=youtube)](https://youtu.be/5pu6o4oJprI)
+[![Notion](https://img.shields.io/badge/Notion-Walkthrough-000000?style=for-the-badge&logo=notion)](https://www.notion.so/10xtechinfinity/Demo-for-Agentic-PM-34ca49df5d688025b0adeb2f22fb78b1#34ca49df5d688065be8acd2b0a72c3ef)
 
 </div>
