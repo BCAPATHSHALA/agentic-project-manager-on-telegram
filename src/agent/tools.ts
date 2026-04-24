@@ -75,7 +75,7 @@ export const createTaskTool = tool({
     try {
       const context = requireAgentContext(ctx);
       const resolvedPriority = priority ?? "MEDIUM";
-      const task = await taskService.create({
+      const { task, created } = await taskService.create({
         title,
         description: description ?? undefined,
         assignee_handle: assignee_handle ?? undefined,
@@ -87,6 +87,9 @@ export const createTaskTool = tool({
         ? `@${assignee_handle.replace(/^@/, "")}`
         : "unassigned";
       const due = due_date ? ` · due ${dayjs(due_date).format("DD MMM")}` : "";
+      if (!created) {
+        return `ℹ️ Task #${shortId(task.id)} already exists, so I did not create it again: "${task.title}" ${priorityEmoji(resolvedPriority)} → ${assignee}${due}`;
+      }
       return `✅ Task #${shortId(task.id)} created: "${task.title}" ${priorityEmoji(resolvedPriority)} → ${assignee}${due}`;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";

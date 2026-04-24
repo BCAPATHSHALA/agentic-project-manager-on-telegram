@@ -24,6 +24,25 @@ interface ListTasksFilter {
   priority?: Priority;
 }
 
+const ACTIVE_TASK_STATUSES: TaskStatus[] = [
+  "TODO",
+  "IN_PROGRESS",
+  "BLOCKED",
+  "IN_REVIEW",
+];
+
+function normalizeTitle(title: string): string {
+  return title.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function toUtcDateKey(date: Date | null | undefined): string | null {
+  if (!date) return null;
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export const taskService = {
   /**
    * Create a new task.
@@ -54,6 +73,38 @@ export const taskService = {
         }
       }
 
+      const dueDate = data.due_date ? new Date(data.due_date) : null;
+      if (dueDate && Number.isNaN(dueDate.getTime())) {
+        throw new Error("Invalid due date format.");
+      }
+
+      // Guard against accidental duplicate creates from repeated tool calls.
+      const existingActiveTasks = await prisma.task.findMany({
+        where: {
+          projectId: data.projectId,
+          status: { in: ACTIVE_TASK_STATUSES },
+        },
+        include: { assignee: true },
+      });
+
+      const normalizedIncomingTitle = normalizeTitle(data.title);
+      const incomingDueDateKey = toUtcDateKey(dueDate);
+      const matchingTask = existingActiveTasks.find((task) => {
+        if (normalizeTitle(task.title) !== normalizedIncomingTitle)
+          return false;
+        if (task.priority !== data.priority) return false;
+        if ((task.assigneeId ?? null) !== (assigneeId ?? null)) return false;
+        return toUtcDateKey(task.dueDate) === incomingDueDateKey;
+      });
+
+      if (matchingTask) {
+        logger.info(
+          { taskId: matchingTask.id, title: matchingTask.title },
+          "Duplicate task create prevented",
+        );
+        return { task: matchingTask, created: false as const };
+      }
+
       const task = await prisma.task.create({
         data: {
           title: data.title,
@@ -62,15 +113,16 @@ export const taskService = {
           projectId: data.projectId,
           assigneeId: assigneeId ?? null,
           // Parse ISO date string safely
-          dueDate: data.due_date ? new Date(data.due_date) : null,
+          dueDate,
         },
         include: { assignee: true },
       });
 
       logger.info({ taskId: task.id, title: task.title }, "Task created");
-      return task;
+      return { task, created: true as const };
     } catch (err) {
       logger.error({ err, data }, "Failed to create task");
+      if (err instanceof Error) throw err;
       throw new Error("Could not create task. Please try again.");
     }
   },
