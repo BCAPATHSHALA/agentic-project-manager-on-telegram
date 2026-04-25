@@ -1,8 +1,3 @@
-[build]
-builder = "nixpacks"
-buildCommand = "bun install && bunx prisma generate"
-
 [deploy]
-startCommand = "bunx prisma migrate deploy && bun src/index.ts"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
