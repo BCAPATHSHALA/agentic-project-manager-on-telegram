@@ -25,7 +25,9 @@ import { runFollowUps } from "./follow-up";
 import logger from "../utils/logger";
 
 export function startScheduler(bot: Bot): void {
-  // ── Daily Summary — 9:00 AM every day ──
+  const TZ = "Asia/Kolkata";
+
+  // ── Daily Summary — 9:00 AM IST every day ──
   // Posts a concise standup to every project group chat.
   // Gives the team a consistent morning briefing without anyone asking.
   cron.schedule("0 9 * * *", async () => {
@@ -36,7 +38,7 @@ export function startScheduler(bot: Bot): void {
       // Catch here so one failed project doesn't stop the whole cron job
       logger.error({ err }, "Daily summary cron job failed");
     }
-  });
+  }, { timezone: TZ });
 
   // ── Proactive Follow-ups - every 4 hours ──
   // Finds tasks that haven't been updated in 4+ hours.
@@ -49,9 +51,9 @@ export function startScheduler(bot: Bot): void {
     } catch (err) {
       logger.error({ err }, "Follow-up cron job failed");
     }
-  });
+  }, { timezone: TZ });
 
-  // ── Overdue Alert - 10:00 AM every day ──
+  // ── Overdue Alert - 10:00 AM IST every day ──
   // Runs after the daily summary to flag any tasks past their due date.
   // Posts directly to group without agent, simple and fast.
   cron.schedule("0 10 * * *", async () => {
@@ -61,10 +63,10 @@ export function startScheduler(bot: Bot): void {
     } catch (err) {
       logger.error({ err }, "Overdue alert cron job failed");
     }
-  });
+  }, { timezone: TZ });
 
   logger.info(
-    "📅 Scheduler started — daily@9AM · follow-ups every 4h · overdue@10AM",
+    "📅 Scheduler started — daily@9AM IST · follow-ups every 4h · overdue@10AM IST",
   );
 }
 
